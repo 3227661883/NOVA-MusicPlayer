@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
                     isPlaying = isPlaying,
                     playbackState = playbackState,
                     visualizerAmplitude = visualizerAmplitude,
+                    waveform = waveform,
                     currentSongInfo = currentSongInfo,
                     albumArtBitmap = albumArtBitmap
                 )
@@ -173,6 +174,7 @@ class MainActivity : ComponentActivity() {
     private val playbackState by remember { mutableStateOf(PlaybackService.PlaybackState(false, 0L, 0L)) }
     private var currentSongInfo by remember { mutableStateOf("No song selected") }
     private var visualizerAmplitude by remember { mutableStateOf(0f) }
+    private var waveform by remember { mutableStateOf<FloatArray?>(null) }
     private var albumArtBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
@@ -187,14 +189,21 @@ class MainActivity : ComponentActivity() {
                 }
             }
             lifecycleScope.launch {
-                // Collect visualizer data and compute amplitude
-                service.visualizerData.collect { waveform ->
-                    if (waveform.isNotEmpty()) {
-                        // Compute RMS or peak amplitude
-                        val maxAbs = waveform.map { it.toInt() and 0xFF }.map { if (it > 127) it - 256 else it }.map { kotlin.math.abs(it) }.maxOrNull() ?: 0
-                        // Normalize to 0-1 (max possible is 128 for signed byte)
-                        visualizerAmplitude.value = maxAbs / 128f
+                // Collect visualizer data and convert to normalized float array for drawing
+                service.visualizerData.collect { byteArray ->
+                    if (byteArray.isNotEmpty()) {
+                        // Convert signed byte (-128..127) to float (-1..1)
+                        val floatArray = FloatArray(byteArray.size) { i ->
+                            val b = byteArray[i]
+                            val f = if (b > 0) b / 127f else b / 128f
+                            f
+                        }
+                        waveform.value = floatArray
+                        // Also compute amplitude (peak) for possible use
+                        val maxAbs = floatArray.map { kotlin.math.abs(it) }.maxOrNull() ?: 0f
+                        visualizerAmplitude.value = maxAbs
                     } else {
+                        waveform.value = null
                         visualizerAmplitude.value = 0f
                     }
                 }
@@ -236,6 +245,7 @@ fun NovaMusicPlayerUI(
     isPlaying: Boolean,
     playbackState: PlaybackService.PlaybackState,
     visualizerAmplitude: Float,
+    waveform: FloatArray?,
     currentSongInfo: String,
     albumArtBitmap: Bitmap?
 ) {
@@ -279,9 +289,9 @@ fun NovaMusicPlayerUI(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Visualizer - using amplitude from audio waveform, with album art as background if available
+        // Visualizer - using actual waveform data
         Visualizer(
-            amplitude = visualizerAmplitude,
+            waveform = waveform,
             isPlaying = isPlaying,
             albumArtBitmap = albumArtBitmap
         )
@@ -332,7 +342,7 @@ fun NovaMusicPlayerUI(
 }
 
 @Composable
-fun Visualizer(amplitude: Float, isPlaying: Boolean, albumArtBitmap: Bitmap? = null) {
+fun Visualizer(waveform: FloatArray?, isPlaying: Boolean, albumArtBitmap: Bitmap? = null) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -349,33 +359,62 @@ fun Visualizer(amplitude: Float, isPlaying: Boolean, albumArtBitmap: Bitmap? = n
             modifier = Modifier
                 .fillMaxSize()
         ) {
-            if (isPlaying) {
+            if (isPlaying && waveform != null && waveform.isNotEmpty()) {
                 val width = size.width
                 val height = size.height
-                val barCount = 30
-                val barWidth = width / barCount
-                val maxBarHeight = height * 0.7f // leave some margin
-                // We need waveform data; we don't have it directly here, but we can approximate using amplitude
-                // For demo, we'll generate a simple sine wave based on amplitude and time
-                val time = System.currentTimeMillis() % 2000L / 2000f // 0-1 over 2 seconds
-                repeat(barCount) { index ->
-                    val x = index * barWidth
-                    // Use a varying phase per bar for interesting look
-                    val phase = (index * 0.2f + time * 4f) % (2 * Math.PI)
-                    val sinVal = kotlin.math.sin(phase)
-                    val barHeight = (maxBarHeight * amplitude * 0.8f) * (sinVal * 0.5f + 0.5f) // 0-1 range
-                    val barColor = Color(
-                        red = 0f,
-                        green = (0.7f + amplitude * 0.3f).coerceIn(0f, 1f),
-                        blue = 0.9f,
-                        alpha = 0.8f
+                val pointCount = waveform.size
+                if (pointCount >= 2) {
+                    val xStep = width / (pointCount - 1)
+                    val maxAmplitudeHeight = height * 0.4f // leave some margin
+                    val centerY = height / 2f
+                    // Create a path for the waveform
+                    val path = android.graphics.Path().apply {
+                        moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
+                        for (i in 1 until pointCount) {
+                            val x = i * xStep
+                            val y = centerY - waveform[i] * maxAmplitudeHeight
+                            lineTo(x, y)
+                        }
+                    }
+                    // Draw the path
+                    drawPath(
+                        path = path,
+                        color = Color(0xFF00BFA6), // teal accent
+                        strokeWidth = 2f
                     )
-                    drawRect(
-                        color = barColor,
-                        topLeft = Offset(x, height / 2 - barHeight / 2),
-                        size = Size(barWidth - 2, barHeight)
+                    // Optionally fill under the curve with gradient
+                    val fillPath = android.graphics.Path().apply {
+                        moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
+                        for (i in 1 until pointCount) {
+                            val x = i * xStep
+                            val y = centerY - waveform[i] * maxAmplitudeHeight
+                            lineTo(x, y)
+                        }
+                        lineTo(width, height)
+                        lineTo(0f, height)
+                        close()
+                    }
+                    // Create a vertical gradient for fill
+                    val shader = android.graphics.LinearGradient(
+                        0f, 0f, 0f, height,
+                        intArrayOf(0x6600BFA6, 0x00000000), // teal with alpha to transparent
+                        floatArrayOf(0f, 1f),
+                        android.graphics.Shader.TileMode.CLAMP
+                    )
+                    drawPath(
+                        path = fillPath,
+                        color = Color(0x6600BFA6),
+                        style = Stroke(width = 0f, fill = Fill(shader))
                     )
                 }
+            } else {
+                // Draw a placeholder line when not playing or no data
+                drawLine(
+                    start = Offset(0f, size.height / 2),
+                    end = Offset(size.width, size.height / 2),
+                    color = Color(0xFF666666),
+                    strokeWidth = 2f
+                )
             }
         }
     }
