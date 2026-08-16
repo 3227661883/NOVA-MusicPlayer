@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import com.example.novamusicplayer.service.PlaybackService
 import com.example.novamusicplayer.ui.theme.NovaTheme
@@ -36,11 +37,19 @@ class MainActivity : ComponentActivity() {
             val binder = service as PlaybackService.LocalBinder
             playbackService = binder.getService()
             isBound = true
+            // Start collecting playback state when bound
+            _playbackStateJob = lifecycleScope.launchWhenStarted {
+                playbackService?.getPlaybackState()?.collect { state ->
+                    playbackState.value = state
+                    isPlaying.value = state.isPlaying
+                }
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playbackService = null
+            _playbackStateJob?.cancel()
         }
     }
 
@@ -80,7 +89,9 @@ class MainActivity : ComponentActivity() {
                     onSelectSong = { checkPermissionAndOpenPicker() },
                     onPlayPause = { togglePlayPause() },
                     isPlaying = isPlaying,
-                    playbackState = playbackState
+                    playbackState = playbackState,
+                    visualizerAmplitude = visualizerAmplitude,
+                    currentSongInfo = currentSongInfo
                 )
             }
         }
@@ -139,14 +150,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // State variables for UI (we'll collect from service via a flow, but for simplicity we use mutable state)
-    // In a more refined version, we would collect the StateFlow from the service.
+    // State variables for UI
     private var isPlaying by remember { mutableStateOf(false) }
     private val playbackState by remember { mutableStateOf(PlaybackService.PlaybackState(false, 0L, 0L)) }
+    private var currentSongInfo by remember { mutableStateOf("No song selected") }
+    // Simple amplitude for visualizer (0.0f to 1.0f) - we'll use a normalized RMS value
+    private val visualizerAmplitude by remember { mutableStateOf(0f) }
+    private var _playbackStateJob: Job? = null
 
-    // We'll update these states via a LaunchedEffect that collects from service when bound.
-    // For brevity, we'll skip the flow collection here and just update UI based on service calls.
-    // In a production app, we would expose a StateFlow from the service and collect it.
+    // Update current song info when metadata changes (simplified - in reality we'd observe media metadata)
+    private fun updateSongInfo(uri: Uri?) {
+        // For now, just show the file name - real implementation would extract metadata
+        currentSongInfo.value = uri?.lastPathSegment ?: "Unknown"
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -154,6 +170,7 @@ class MainActivity : ComponentActivity() {
             unbindService(serviceConnection)
             isBound = false
         }
+        _playbackStateJob?.cancel()
     }
 }
 
@@ -162,7 +179,9 @@ fun NovaMusicPlayerUI(
     onSelectSong: () -> Unit,
     onPlayPause: () -> Unit,
     isPlaying: Boolean,
-    playbackState: PlaybackService.PlaybackState
+    playbackState: PlaybackService.PlaybackState,
+    visualizerAmplitude: Float,
+    currentSongInfo: String
 ) {
     Column(
         modifier = Modifier
@@ -178,11 +197,17 @@ fun NovaMusicPlayerUI(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Song info (placeholder)
+        // Song info
         Text(
-            text = "No song selected",
-            style = MaterialTheme.typography.bodyLarge
+            text = currentSongInfo,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Visualizer - now using actual amplitude from audio (placeholder for now)
+        Visualizer(amplitude = visualizerAmplitude, isPlaying = isPlaying)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -212,13 +237,63 @@ fun NovaMusicPlayerUI(
             }
         }
 
-        // Progress bar (placeholder)
-        // We could add a SeekBar here showing position/duration
-        // For now, just show the position as text.
-        Text(
-            text = "${formatMs(playbackState.positionMs)} / ${formatMs(playbackState.durationMs)}",
-            style = MaterialTheme.typography.bodyMedium
-        )
+        // Progress info
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = formatMs(playbackState.positionMs),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                text = formatMs(playbackState.durationMs),
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+fun Visualizer(amplitude: Float, isPlaying: Boolean) {
+    // Simple animated visualizer: number of bars, height based on amplitude + animation
+    val progress = remember { mutableStateOf(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            var current = progress.value
+            while (isPlaying) {
+                current = (current + 0.02f) % 1.0f
+                progress.value = current
+                delay(20) // 50 fps
+            }
+        } else {
+            progress.value = 0f
+        }
+    }
+    val waveHeight = (amplitude * 0.5f + progress.value * 0.5f) * 80.dp // max height 80dp
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(100.dp)
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        repeat(10) {
+            val barHeight = if (isPlaying) {
+                // Vary each bar slightly for a more interesting look
+                val offset = (it * 0.1f + progress.value) % 1.0f
+                (amplitude * 0.3f + offset * 0.7f) * 80.dp
+            } else {
+                0.dp
+            }
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .height(barHeight)
+                    .background(Color(0xFF00BFA6)) // teal accent
+            )
+        }
     }
 }
 
