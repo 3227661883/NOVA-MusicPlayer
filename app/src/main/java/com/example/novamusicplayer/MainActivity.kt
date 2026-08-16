@@ -7,11 +7,13 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.provider.DocumentsContract
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.ActivityResultLauncher
@@ -20,10 +22,10 @@ import androidx.activity.result.contract.ActivityResultContracts.RequestPermissi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.image.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.index
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -32,8 +34,8 @@ import androidx.compose.ui.Unit
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.withResources
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.node.DrawModifier
 import androidx.compose.ui.platform.LocalDensity
@@ -46,7 +48,13 @@ import androidx.lifecycle.lifecycleScope
 import com.example.novamusicplayer.service.PlaybackService
 import com.example.novamusicplayer.ui.theme.NovaTheme
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
 
@@ -93,8 +101,8 @@ class MainActivity : ComponentActivity() {
             )
             // Start service and set the URI
             startPlaybackService(it)
-            // Update song info (simple file name)
-            currentSongInfo.value = uri.lastPathSegment ?: "Unknown"
+            // Fetch metadata and lyrics
+            fetchMetadataAndLyrics(it)
         }
     }
 
@@ -110,7 +118,9 @@ class MainActivity : ComponentActivity() {
                     visualizerAmplitude = visualizerAmplitude,
                     waveform = waveform,
                     currentSongInfo = currentSongInfo,
-                    albumArtBitmap = albumArtBitmap
+                    albumArtBitmap = albumArtBitmap,
+                    lyricLines = lyricLines,
+                    currentLyricIndex = currentLyricIndex
                 )
             }
         }
@@ -176,8 +186,11 @@ class MainActivity : ComponentActivity() {
     private var visualizerAmplitude by remember { mutableStateOf(0f) }
     private var waveform by remember { mutableStateOf<FloatArray?>(null) }
     private var albumArtBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    private var lyricLines by remember { mutableStateOf<List<LyricLine>>(emptyList()) }
+    private var currentLyricIndex by remember { mutableStateOf(-1) }
 
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
+    private var lyricFetchJob: kotlinx.coroutines.Job? = null
 
     private fun startCollectingState() {
         playbackService?.let { service ->
@@ -228,6 +241,118 @@ class MainActivity : ComponentActivity() {
         stateCollectionJob = null
     }
 
+    private fun fetchMetadataAndLyrics(uri: Uri) {
+        // Cancel any ongoing lyric fetch
+        lyricFetchJob?.cancel()
+        lyricFetchJob = lifecycleScope.launch {
+            try {
+                // Try to get metadata from the file using MediaMetadataRetriever
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(this, uri)
+                val title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                retriever.release()
+
+                val trackName = title ?: uri.lastPathSegment ?: "Unknown"
+                val artistName = artist ?: "Unknown Artist"
+
+                // Update song info
+                currentSongInfo.value = "$trackName - $artistName"
+
+                // Fetch lyrics from LRCLib
+                val lyric = fetchLyricsFromLRCLib(trackName, artistName)
+                lyricLines.value = lyric
+                // Reset current lyric index
+                currentLyricIndex.value = -1
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to fetch metadata/lyrics", e)
+                currentSongInfo.value = uri.lastPathSegment ?: "Unknown"
+                lyricLines.value = emptyList()
+                currentLyricIndex.value = -1
+            }
+        }
+    }
+
+    private suspend fun fetchLyricsFromLRCLib(track: String, artist: String): List<LyricLine> {
+        return withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val encodedTrack = java.net.URLEncoder.encode(track, "UTF-8")
+            val encodedArtist = java.net.URLEncoder.encode(artist, "UTF-8")
+            val url = "https://lrclib.net/api/get?artist=$encodedArtist&track=$encodedTrack"
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    // Try without artist
+                    val url2 = "https://lrclib.net/api/get?track=$encodedTrack"
+                    val request2 = Request.Builder().url(url2).build()
+                    response2 = client.newCall(request2).execute()
+                    if (!response2.isSuccessful) {
+                        return@withContext emptyList()
+                    }
+                    response2.body?.string()?.let { parseLrc(it) } ?: emptyList()
+                } else {
+                    response.body?.string()?.let { parseLrc(it) } ?: emptyList()
+                }
+            }
+        }
+    }
+
+    private fun parseLrc(lrc: String): List<LyricLine> {
+        val lines = mutableListOf<LyricLine>()
+        lrc.split("\n").forEach { line ->
+            if (line.startsWith("[") && line.contains("]")) {
+                val tagEnd = line.indexOf(']')
+                val timestamp = line.substring(1, tagEnd)
+                val text = line.substring(tagEnd + 1).trim()
+                // Parse timestamp: [mm:ss.xx] or [mm:ss:xx]
+                val parts = timestamp.split(":")
+                if (parts.size >= 2) {
+                    val minutes = parts[0].toIntOrNull() ?: 0
+                    val seconds = parts[1].toDoubleOrNull() ?: 0.0
+                    var totalSec = minutes * 60 + seconds
+                    if (parts.size >= 3) {
+                        // Handle hundredths of a second
+                        val hundredths = parts[2].toDoubleOrNull() ?: 0.0
+                        totalSec += hundredths / 100.0
+                    }
+                    val timeMs = (totalSec * 1000).toLong()
+                    if (!text.isEmpty()) {
+                        lines.add(LyricLine(timeMs, text))
+                    }
+                }
+            }
+        }
+        // Sort by time
+        lines.sortBy { it.timeMs }
+        return lines
+    }
+
+    // Update current lyric index based on playback position
+    private fun updateLyricIndex(positionMs: Long) {
+        if (lyricLines.value.isEmpty()) {
+            currentLyricIndex.value = -1
+            return
+        }
+        // Find the last lyric line with time <= positionMs
+        var index = -1
+        for (i in lyricLines.value.indices) {
+            if (lyricLines.value[i].timeMs <= positionMs) {
+                index = i
+            } else {
+                break
+            }
+        }
+        if (index != currentLyricIndex.value) {
+            currentLyricIndex.value = index
+        }
+    }
+
+    private fun stopCollectingState() {
+        stateCollectionJob?.cancel()
+        stateCollectionJob = null
+        lyricFetchJob?.cancel()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopCollectingState()
@@ -247,7 +372,9 @@ fun NovaMusicPlayerUI(
     visualizerAmplitude: Float,
     waveform: FloatArray?,
     currentSongInfo: String,
-    albumArtBitmap: Bitmap?
+    albumArtBitmap: Bitmap?,
+    lyricLines: List<LyricLine>,
+    currentLyricIndex: Int
 ) {
     Column(
         modifier = Modifier
@@ -261,7 +388,7 @@ fun NovaMusicPlayerUI(
             style = MaterialTheme.typography.titleLarge
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Song info and album art
         Row(
@@ -271,8 +398,13 @@ fun NovaMusicPlayerUI(
             Column {
                 Text(
                     text = currentSongInfo,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Now Playing",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
             albumArtBitmap?.let { bitmap ->
@@ -287,13 +419,28 @@ fun NovaMusicPlayerUI(
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Visualizer - using actual waveform data
+        // Visualizer
         Visualizer(
-            waveform = waveform,
+            amplitude = visualizerAmplitude,
             isPlaying = isPlaying,
-            albumArtBitmap = albumArtBitmap
+            waveform = waveform
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Lyric list
+        LyricView(
+            lines = lyricLines,
+            currentIndex = currentLyricIndex,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .padding(8.dp)
+                .background(MaterialTheme.colorScheme.background)
+                .clip(RoundedCornerShape(12.dp))
+                .verticalScroll(rememberScrollState())
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -342,19 +489,55 @@ fun NovaMusicPlayerUI(
 }
 
 @Composable
-fun Visualizer(waveform: FloatArray?, isPlaying: Boolean, albumArtBitmap: Bitmap? = null) {
+fun LyricView(
+    lines: List<LyricLine>,
+    currentIndex: Int,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        modifier = modifier,
+        contentPadding = PaddingValues(8.dp)
+    ) {
+        itemsIndexed(items = lines) { index, line ->
+            val isCurrent = index == currentIndex
+            val lineColor = if (isCurrent) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
+            val bgColor = if (isCurrent) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                Color.Transparent
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp, horizontal = 8.dp)
+                    .background(bgColor)
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                Text(
+                    text = "${formatMs(line.timeMs)} - ${line.text}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = lineColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = null) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(180.dp)
+            .height(120.dp)
             .background(
-                albumArtBitmap?.let { bitmap ->
-                    bitmap.asImageBitmap()
-                } ?: Color(0xFF0D0D0D) // dark background if no album art
+                if (isPlaying) Color(0xFF0D0D0D) else Color(0xFF222222)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(16.dp))
     ) {
-        // Draw waveform on top
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -365,9 +548,8 @@ fun Visualizer(waveform: FloatArray?, isPlaying: Boolean, albumArtBitmap: Bitmap
                 val pointCount = waveform.size
                 if (pointCount >= 2) {
                     val xStep = width / (pointCount - 1)
-                    val maxAmplitudeHeight = height * 0.4f // leave some margin
+                    val maxAmplitudeHeight = height * 0.4f
                     val centerY = height / 2f
-                    // Create a path for the waveform
                     val path = android.graphics.Path().apply {
                         moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
                         for (i in 1 until pointCount) {
@@ -376,35 +558,29 @@ fun Visualizer(waveform: FloatArray?, isPlaying: Boolean, albumArtBitmap: Bitmap
                             lineTo(x, y)
                         }
                     }
-                    // Draw the path
+                    // Draw glowing effect with multiple strokes
+                    val glowPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.parseColor("#00BFA6")
+                        strokeWidth = 4f
+                        style = android.graphics.Paint.Style.STROKE
+                        isAntiAlias = true
+                    }
+                    // We cannot directly set a custom paint in Compose Canvas easily, so we'll approximate by drawing multiple times with increasing stroke width and alpha
+                    val baseColor = Color(0xFF00BFA6)
+                    for (i in 3 downto 1) {
+                        val alpha = (0.2 * i).coerceIn(0f, 0.6f)
+                        val strokeWidth = (2.0 * i).toFloat()
+                        drawPath(
+                            path = path,
+                            color = baseColor.copy(alpha = alpha),
+                            strokeWidth = strokeWidth
+                        )
+                    }
+                    // Main stroke
                     drawPath(
                         path = path,
-                        color = Color(0xFF00BFA6), // teal accent
+                        color = baseColor,
                         strokeWidth = 2f
-                    )
-                    // Optionally fill under the curve with gradient
-                    val fillPath = android.graphics.Path().apply {
-                        moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
-                        for (i in 1 until pointCount) {
-                            val x = i * xStep
-                            val y = centerY - waveform[i] * maxAmplitudeHeight
-                            lineTo(x, y)
-                        }
-                        lineTo(width, height)
-                        lineTo(0f, height)
-                        close()
-                    }
-                    // Create a vertical gradient for fill
-                    val shader = android.graphics.LinearGradient(
-                        0f, 0f, 0f, height,
-                        intArrayOf(0x6600BFA6, 0x00000000), // teal with alpha to transparent
-                        floatArrayOf(0f, 1f),
-                        android.graphics.Shader.TileMode.CLAMP
-                    )
-                    drawPath(
-                        path = fillPath,
-                        color = Color(0x6600BFA6),
-                        style = Stroke(width = 0f, fill = Fill(shader))
                     )
                 }
             } else {
@@ -434,4 +610,12 @@ data class PlaybackService$PlaybackState(
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long
+)
+
+/**
+ * Data class for a lyric line with timestamp.
+ */
+data class LyricLine(
+    val timeMs: Long,
+    val text: String
 )

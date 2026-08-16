@@ -117,3 +117,6 @@ dependencies {
     debugImplementation("androidx.test.core:core-ktx:1.5.0")
     debugImplementation("androidx.test.ext:junit:1.1.5")
 }
+
+    // OkHttp for lyric API calls
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")

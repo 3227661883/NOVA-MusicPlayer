@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Storage permissions for accessing media (if targeting Android 13 or lower, we need READ_EXTERNAL_STORAGE) -->
     <!-- For Android 13+, we use READ_MEDIA_AUDIO etc. -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
