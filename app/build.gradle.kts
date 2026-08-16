@@ -77,6 +77,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
     implementation("androidx.media3:media3-exoplayer-ss:1.3.1")
     implementation("androidx.media3:media3-exoplayer-rtsp:1.3.1")
+    implementation("androidx.media3:media3-exoplayer-ffmpeg:1.3.1") // for DSD, MQA, etc.
     implementation("androidx.media3:media3-common:1.3.1")
     implementation("androidx.media3:media3-datasource:1.3.1")
     implementation("androidx.media3:media3-datasource-cronet:1.3.1")
@@ -109,6 +110,9 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.6.0")
     implementation("io.coil-kt:coil-svg:2.6.0")
 
+    // OkHttp for lyric API calls
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -117,6 +121,3 @@ dependencies {
     debugImplementation("androidx.test.core:core-ktx:1.5.0")
     debugImplementation("androidx.test.ext:junit:1.1.5")
 }
-
-    // OkHttp for lyric API calls
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")

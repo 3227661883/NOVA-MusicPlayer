@@ -3,18 +3,25 @@ package com.example.novamusicplayer.service
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Intent
 import android.content.Context
-import android.graphics.Bitmap
+import android.content.Intent
+import android.media.AudioAttributes
+import android.media.audiofx.Equalizer
+import android.media.audiofx.PresetReverb
 import android.media.audiofx.Visualizer
 import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.Player
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.upstream.DataSource
+import androidx.media3.exoplayer.upstream.DefaultDataSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSession.Callback
 import androidx.media3.session.MediaSession.Builder
@@ -43,6 +50,18 @@ class PlaybackService : Service() {
     // Visualizer data (waveform amplitude 0-255 per byte)
     private val _visualizerData = MutableStateFlow(ByteArray(0))
     val visualizerData: StateFlow<ByteArray> = _visualizerData.asStateFlow()
+
+    // Equalizer
+    private var equalizer: Equalizer? = null
+    private val _equalizer = MutableStateFlow<Equalizer?>(null)
+    val equalizer: StateFlow<Equalizer?> = _equalizer.asStateFlow()
+    private val _equalizerPresetIndex = MutableStateFlow(0)
+    val equalizerPresetIndex: StateFlow<Int> = _equalizerPresetIndex.asStateFlow()
+
+    // Preset Reverb
+    private var presetReverb: PresetReverb? = null
+    private val _reverbPresetIndex = MutableStateFlow(0)
+    val reverbPresetIndex: StateFlow<Int> = _reverbPresetIndex.asStateFlow()
 
     // Album art URI (can be null)
     private val _albumArtUri = MutableStateFlow<Uri?>(null)
@@ -75,13 +94,26 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         visualizer?.release()
+        equalizer?.release()
+        presetReverb?.release()
         player.release()
         mediaSession.release()
         super.onDestroy()
     }
 
     private fun initializePlayer() {
-        player = ExoPlayer.Builder(this).build()
+        // Use low latency audio attributes for AAudio if possible
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.CONTENT_TYPE_MUSIC)
+            .setAllowedCaptureCapabilities(C.CAPTURE_CAPABILITY_ALLOW_CAPTURE_BY_SYSTEM)
+            .build()
+
+        player = ExoPlayer.Builder(this)
+            .setAudioAttributes(audioAttributes, true)
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updatePlaybackState()
@@ -148,6 +180,36 @@ class PlaybackService : Service() {
                 enabled = true
             }
         }
+
+        // Initialize Equalizer if we have an audio session
+        if (sessionId != 0) {
+            equalizer = Equalizer(0, sessionId).apply {
+                // Enable the equalizer
+                enabled = true
+                // Try to use a preset if available, otherwise we can adjust bands later
+                if (numberOfPresets > 0) {
+                    // Use the first preset as default (often "Normal" or "Bass Boost")
+                    usePreset(0)
+                    _equalizerPresetIndex.value = 0
+                    Log.d("PlaybackService", "Equalizer preset set to: ${getPresetName(0)}")
+                }
+                // Expose the equalizer instance
+                _equalizer.value = this
+            }
+        }
+
+        // Initialize PresetReverb if we have an audio session
+        if (sessionId != 0) {
+            presetReverb = PresetReverb(0, sessionId).apply {
+                enabled = true
+                // Use the first preset as default
+                if (numberOfPresets > 0) {
+                    preset = 0
+                    _reverbPresetIndex.value = 0
+                    Log.d("PlaybackService", "Reverb preset set to: ${getPresetName(0)}")
+                }
+            }
+        }
     }
 
     private fun buildNotification(): Notification {
@@ -212,7 +274,12 @@ class PlaybackService : Service() {
 
     /** Called by UI to set a new audio source */
     fun setUri(uri: Uri) {
-        player.setMediaItem(MediaItem.fromUri(uri))
+        // Clear previous media item
+        player.setMediaItem(
+            MediaItem.Builder()
+                .setUri(uri)
+                .build()
+        )
         player.prepare()
         updateMetadata()
         updatePlaybackState()
@@ -238,6 +305,46 @@ class PlaybackService : Service() {
 
     /** Expose album art URI */
     fun getAlbumArtUri(): StateFlow<Uri?> = albumArtUri
+
+    /** Expose equalizer preset index */
+    fun getEqualizerPresetIndex(): StateFlow<Int> = equalizerPresetIndex
+
+    /** Get list of preset names for Equalizer */
+    fun getEqualizerPresetNames(): List<String> {
+        return equalizer?.let {
+            val names = mutableListOf<String>()
+            for (i in 0 until numberOfPresets) {
+                names.add(getPresetName(i))
+            }
+            names
+        } ?: emptyList()
+    }
+
+    /** Set equalizer preset by index */
+    fun setEqualizerPreset(index: Int) {
+        equalizer?.usePreset(index)
+        _equalizerPresetIndex.value = index
+    }
+
+    /** Expose reverb preset index */
+    fun getReverbPresetIndex(): StateFlow<Int> = reverbPresetIndex
+
+    /** Get list of preset names for PresetReverb */
+    fun getReverbPresetNames(): List<String> {
+        return presetReverb?.let {
+            val names = mutableListOf<String>()
+            for (i in 0 until numberOfPresets) {
+                names.add(getPresetName(i))
+            }
+            names
+        } ?: emptyList()
+    }
+
+    /** Set reverb preset by index */
+    fun setReverbPreset(index: Int) {
+        presetReverb?.preset = index
+        _reverbPresetIndex.value = index
+    }
 
     companion object {
         private const val NOTIFICATION_ID = 1

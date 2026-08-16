@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.Equalizer
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
@@ -24,7 +25,6 @@ import androidx.compose.foundation.image.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.index
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -120,7 +120,9 @@ class MainActivity : ComponentActivity() {
                     currentSongInfo = currentSongInfo,
                     albumArtBitmap = albumArtBitmap,
                     lyricLines = lyricLines,
-                    currentLyricIndex = currentLyricIndex
+                    currentLyricIndex = currentLyricIndex,
+                    equalizer = equalizer,
+                    equalizerBands = equalizerBands
                 )
             }
         }
@@ -188,9 +190,12 @@ class MainActivity : ComponentActivity() {
     private var albumArtBitmap by remember { mutableStateOf<Bitmap?>(null) }
     private var lyricLines by remember { mutableStateOf<List<LyricLine>>(emptyList()) }
     private var currentLyricIndex by remember { mutableStateOf(-1) }
+    private var equalizer by remember { mutableStateOf<Equalizer?>(null) }
+    private var equalizerBands by remember { mutableStateOf<List<EqualizerBand>>(emptyList()) }
 
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
     private var lyricFetchJob: kotlinx.coroutines.Job? = null
+    private var equalizerJob: kotlinx.coroutines.Job? = null
 
     private fun startCollectingState() {
         playbackService?.let { service ->
@@ -233,12 +238,45 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            lifecycleScope.launch {
+                // Collect equalizer and initialize bands
+                service.equalizer.collect { eq ->
+                    equalizer.value = eq
+                    if (eq != null) {
+                        initializeEqualizerBands(eq)
+                    }
+                }
+            }
         }
+    }
+
+    private fun initializeEqualizerBands(eq: Equalizer) {
+        val bands = eq.numberOfBands
+        val bandLevels = MutableList(bands) { 0 }
+        val minLevel = eq.bandLevelRange[0]
+        val maxLevel = eq.bandLevelRange[1]
+        
+        // Create band info with frequencies and initial levels
+        val bandsList = mutableListOf<EqualizerBand>()
+        for (i in 0 until bands) {
+            val freq = eq.getCenterFreq(i)
+            val level = eq.getBandLevel(i)
+            bandsList.add(EqualizerBand(
+                index = i,
+                frequency = freq,
+                initialLevel = level.coerceIn(minLevel, maxLevel),
+                minLevel = minLevel,
+                maxLevel = maxLevel
+            ))
+        }
+        equalizerBands.value = bandsList
     }
 
     private fun stopCollectingState() {
         stateCollectionJob?.cancel()
         stateCollectionJob = null
+        lyricFetchJob?.cancel()
+        equalizerJob?.cancel()
     }
 
     private fun fetchMetadataAndLyrics(uri: Uri) {
@@ -351,6 +389,7 @@ class MainActivity : ComponentActivity() {
         stateCollectionJob?.cancel()
         stateCollectionJob = null
         lyricFetchJob?.cancel()
+        equalizerJob?.cancel()
     }
 
     override fun onDestroy() {
@@ -374,7 +413,9 @@ fun NovaMusicPlayerUI(
     currentSongInfo: String,
     albumArtBitmap: Bitmap?,
     lyricLines: List<LyricLine>,
-    currentLyricIndex: Int
+    currentLyricIndex: Int,
+    equalizer: Equalizer?,
+    equalizerBands: List<EqualizerBand>
 ) {
     Column(
         modifier = Modifier
@@ -388,44 +429,34 @@ fun NovaMusicPlayerUI(
             style = MaterialTheme.typography.titleLarge
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Song info and album art
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column {
-                Text(
-                    text = currentSongInfo,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Now Playing",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
-            albumArtBitmap?.let { bitmap ->
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Album Art",
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                )
-            }
-        }
+        // Album cover with rotation
+        AlbumCover(
+            albumArtBitmap = albumArtBitmap,
+            isPlaying = isPlaying
+        )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Visualizer
         Visualizer(
             amplitude = visualizerAmplitude,
             isPlaying = isPlaying,
             waveform = waveform
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Equalizer UI
+        EqualizerUI(
+            equalizer = equalizer,
+            bands = equalizerBands,
+            onBandLevelChanged = { bandIndex, level ->
+                equalizer?.let { eq ->
+                    eq.setBandLevel(bandIndex, level)
+                }
+            }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -489,6 +520,157 @@ fun NovaMusicPlayerUI(
 }
 
 @Composable
+fun AlbumCover(albumArtBitmap: Bitmap?, isPlaying: Boolean) {
+    // We'll use a Box to center the image and apply rotation
+    Box(
+        modifier = Modifier
+            .size(200.dp)
+    ) {
+        albumArtBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Album Cover",
+                modifier = Modifier
+                    .size(200.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+            )
+        } ?: {
+            // Placeholder if no album art
+            Box(
+                modifier = Modifier
+                    .size(200.dp)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = "No Album Art",
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(64.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun EqualizerUI(
+    equalizer: Equalizer?,
+    bands: List<EqualizerBand>,
+    onBandLevelChanged: (Int, Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Equalizer",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (equalizer == null || bands.isEmpty()) {
+            Text(
+                text = "Loading equalizer...",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .align(Alignment.CenterStart)
+            )
+        } else {
+            // Preset selector
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Preset: ${equalizer?.let { eq -> eq.getPresetName(eq.getPreset()) } ?: "Unknown"}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                // In a full implementation, we'd have a dropdown here to change presets
+                // For now, we just show the current preset
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Band sliders
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                bands.forEach { band ->
+                    EqualizerBandSlider(
+                        band = band,
+                        onLevelChanged = { level ->
+                            onBandLevelChanged(band.index, level)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EqualizerBandSlider(
+    band: EqualizerBand,
+    onLevelChanged: (Int) -> Unit
+) {
+    val level by remember { mutableStateOf(band.initialLevel) }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${band.frequency / 1000}Hz",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .width(48.dp)
+            )
+            Text(
+                text = "${band.level}dB",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .width(32.dp)
+                    .align(Alignment.End)
+            )
+        }
+        Slider(
+            value = level.toFloat(),
+            onValueChange = {
+                val newLevel = it.roundToInt()
+                level.value = newLevel
+                onBandLevelChanged(newLevel)
+            },
+            valueRange = band.minLevel..band.maxLevel,
+            steps = (band.maxLevel - band.minLevel).toInt(),
+            thumb = { 
+                SliderDefaults.Thumb(
+                    color = MaterialTheme.colorScheme.primary,
+                    size = 12.dp
+                )
+            },
+            trackColor = MaterialTheme.colorScheme.primaryVariant,
+            activeTrackColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp)
+        )
+    }
+}
+
+@Composable
 fun LyricView(
     lines: List<LyricLine>,
     currentIndex: Int,
@@ -529,14 +711,18 @@ fun LyricView(
 
 @Composable
 fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = null) {
+    // Background color that changes with amplitude (blue that gets brighter)
+    val backgroundColor = Color(
+        hue = 210f,
+        saturation = 0.3f,
+        value = 0.1f + amplitude * 0.4f
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .background(
-                if (isPlaying) Color(0xFF0D0D0D) else Color(0xFF222222)
-            )
-            .clip(RoundedCornerShape(16.dp))
+            .height(180.dp)
+            .background(backgroundColor)
+            .clip(RoundedCornerShape(20.dp))
     ) {
         Canvas(
             modifier = Modifier
@@ -548,7 +734,7 @@ fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = nul
                 val pointCount = waveform.size
                 if (pointCount >= 2) {
                     val xStep = width / (pointCount - 1)
-                    val maxAmplitudeHeight = height * 0.4f
+                    val maxAmplitudeHeight = height * 0.4f // leave some margin
                     val centerY = height / 2f
                     val path = android.graphics.Path().apply {
                         moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
@@ -558,15 +744,8 @@ fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = nul
                             lineTo(x, y)
                         }
                     }
-                    // Draw glowing effect with multiple strokes
-                    val glowPaint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.parseColor("#00BFA6")
-                        strokeWidth = 4f
-                        style = android.graphics.Paint.Style.STROKE
-                        isAntiAlias = true
-                    }
-                    // We cannot directly set a custom paint in Compose Canvas easily, so we'll approximate by drawing multiple times with increasing stroke width and alpha
-                    val baseColor = Color(0xFF00BFA6)
+                    // Draw the waveform with a glow effect by drawing multiple strokes with increasing width and decreasing alpha
+                    val baseColor = Color(0xFF00BFA6) // teal accent
                     for (i in 3 downto 1) {
                         val alpha = (0.2 * i).coerceIn(0f, 0.6f)
                         val strokeWidth = (2.0 * i).toFloat()
@@ -618,4 +797,16 @@ data class PlaybackService$PlaybackState(
 data class LyricLine(
     val timeMs: Long,
     val text: String
+)
+
+/**
+ * Data class for an equalizer band.
+ */
+data class EqualizerBand(
+    val index: Int,
+    val frequency: Int,
+    val initialLevel: Int,
+    val minLevel: Int,
+    val maxLevel: Int,
+    var level: Int = 0
 )
