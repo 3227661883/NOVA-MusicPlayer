@@ -13,48 +13,50 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.provider.DocumentsContract
-import android.util.Log
-import androidx.activity.ComponentActivity
-import androidx.activity.result.ActivityResultCallback
-import androidx.activity.result.ActivityResultLauncher
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.image.*
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.Unit
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.withResources
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.node.DrawModifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.PainterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
-import com.example.novamusicplayer.service.PlaybackService
-import com.example.novamusicplayer.ui.theme.NovaTheme
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.Response
-import org.json.JSONObject
+            android.provider.DocumentsContract
+            android.util.Log
+            androidx.activity.ComponentActivity
+            androidx.activity.result.ActivityResultCallback
+            androidx.activity.result.ActivityResultLauncher
+            androidx.activity.result.contract.ActivityResultContracts
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission
+            androidx.compose.animation.AnimationSpec
+            androidx.compose.animation.tween
+            androidx.compose.foundation.layout.*
+            androidx.compose.foundation.image.*
+            androidx.compose.foundation.layout.*
+            androidx.compose.foundation.lazy.LazyColumn
+            androidx.compose.foundation.lazy.itemsIndexed
+            androidx.compose.foundation.shape.RoundedCornerShape
+            androidx.compose.material3.*
+            androidx.compose.runtime.*
+            androidx.compose.ui.Alignment
+            androidx.compose.ui.Modifier
+            androidx.compose.ui.Unit
+            androidx.compose.ui.draw.clip
+            androidx.compose.ui.draw.withResources
+            androidx.compose.ui.graphics.*
+            androidx.compose.ui.graphics.Color
+            androidx.compose.ui.graphics.drawscope.DrawScope
+            androidx.compose.ui.layout.ContentScale
+            androidx.compose.ui.node.DrawModifier
+            androidx.compose.ui.platform.LocalDensity
+            androidx.compose.ui.platform.LocalLayoutDirection
+            androidx.compose.ui.res.PainterResource
+            androidx.compose.ui.text.font.FontWeight
+            androidx.compose.ui.unit.dp
+            androidx.core.content.ContextCompat
+            androidx.lifecycle.lifecycleScope
+            com.example.novamusicplayer.service.PlaybackService
+            com.example.novamusicplayer.ui.theme.NovaTheme
+            kotlinx.coroutines.flow.collectLatest
+            kotlinx.coroutines.flow.update
+            kotlinx.coroutines.launch
+            kotlinx.coroutines.withContext
+            okhttp3.OkHttpClient
+            okhttp3.Request
+            okhttp3.Response
+            org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
 
@@ -122,7 +124,8 @@ class MainActivity : ComponentActivity() {
                     lyricLines = lyricLines,
                     currentLyricIndex = currentLyricIndex,
                     equalizer = equalizer,
-                    equalizerBands = equalizerBands
+                    equalizerBands = equalizerBands,
+                    rotationAngle = rotationAngle
                 )
             }
         }
@@ -192,10 +195,12 @@ class MainActivity : ComponentActivity() {
     private var currentLyricIndex by remember { mutableStateOf(-1) }
     private var equalizer by remember { mutableStateOf<Equalizer?>(null) }
     private var equalizerBands by remember { mutableStateOf<List<EqualizerBand>>(emptyList()) }
+    private var rotationAngle by remember { mutableStateOf(0f) }
 
-    private var stateCollectionJob: kotlinx.coroutines.Job? = null
-    private var lyricFetchJob: kotlinx.coroutines.Job? = null
-    private var equalizerJob: kotlinx.coroutines.Job? = null
+    private var stateCollectionJob: kotlinx.coroutines.Job? = nil
+    private var lyricFetchJob: kotlinx.coroutines.Job? = nil
+    private var equalizerJob: kotlinx.coroutines.Job? = nil
+    private var rotationJob: kotlinx.coroutines.Job? = nil
 
     private fun startCollectingState() {
         playbackService?.let { service ->
@@ -247,6 +252,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            // Animate rotation when playing
+            rotationJob = lifecycleScope.launch {
+                var lastTime = System.currentTimeMillis()
+                while (isBound) {
+                    val now = System.currentTimeMillis()
+                    val deltaTime = (now - lastTime) / 1000.0 // seconds
+                    lastTime = now
+                    
+                    if (isPlaying) {
+                        // Rotate at 30 degrees per second when playing
+                        rotationAngle.value = (rotationAngle.value + 30.0 * deltaTime) % 360.0
+                    }
+                    // Delay to avoid excessive updates (aim for ~30fps)
+                    delay(33)
+                }
+            }
         }
     }
 
@@ -274,9 +295,10 @@ class MainActivity : ComponentActivity() {
 
     private fun stopCollectingState() {
         stateCollectionJob?.cancel()
-        stateCollectionJob = null
+        stateCollectionJob = nil
         lyricFetchJob?.cancel()
         equalizerJob?.cancel()
+        rotationJob?.cancel()
     }
 
     private fun fetchMetadataAndLyrics(uri: Uri) {
@@ -387,9 +409,10 @@ class MainActivity : ComponentActivity() {
 
     private fun stopCollectingState() {
         stateCollectionJob?.cancel()
-        stateCollectionJob = null
+        stateCollectionJob = nil
         lyricFetchJob?.cancel()
         equalizerJob?.cancel()
+        rotationJob?.cancel()
     }
 
     override fun onDestroy() {
@@ -415,7 +438,8 @@ fun NovaMusicPlayerUI(
     lyricLines: List<LyricLine>,
     currentLyricIndex: Int,
     equalizer: Equalizer?,
-    equalizerBands: List<EqualizerBand>
+    equalizerBands: List<EqualizerBand>,
+    rotationAngle: Float
 ) {
     Column(
         modifier = Modifier
@@ -431,9 +455,10 @@ fun NovaMusicPlayerUI(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Album cover with rotation
+        // Album cover with rotation and light trail effect
         AlbumCover(
             albumArtBitmap = albumArtBitmap,
+            rotationAngle = rotationAngle,
             isPlaying = isPlaying
         )
 
@@ -520,38 +545,103 @@ fun NovaMusicPlayerUI(
 }
 
 @Composable
-fun AlbumCover(albumArtBitmap: Bitmap?, isPlaying: Boolean) {
-    // We'll use a Box to center the image and apply rotation
+fun AlbumCover(albumArtBitmap: Bitmap?, rotationAngle: Float, isPlaying: Boolean) {
+    // We'll use a Box to center the image and apply rotation with light trail effect
     Box(
         modifier = Modifier
-            .size(200.dp)
+            .size(220.dp)
+            .background(
+                // Create a subtle gradient background for depth
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF0D0D0D),
+                        Color(0xFF1A1A2E)
+                    )
+                )
+            )
+            .clip(RoundedCornerShape(16.dp))
     ) {
+        // Light trail effect - multiple faded copies of the image with increasing rotation offset
+        if (isPlaying && albumArtBitmap != null) {
+            val trailCount = 5
+            val trailSpacing = 5.0f // degrees between trail images
+            val baseAlpha = 0.3f
+            
+            // Draw trail images (further back in time)
+            for (i in trailCount downTo 1) {
+                val offset = i * trailSpacing
+                val alpha = baseAlpha * (1.0f - (i.toFloat() / trailCount))
+                val trailRotation = (rotationAngle - offset) % 360.0
+                
+                Image(
+                    bitmap = albumArtBitmap.asImageBitmap(),
+                    contentDescription = "Album Cover Trail",
+                    modifier = Modifier
+                        .size(180.dp)
+                        .alpha(alpha)
+                        .graphicsLayer {
+                            rotationZ = trailRotation
+                            scaleX = 1.0f - (i * 0.02f) // Slightly smaller for trailing images
+                            scaleY = 1.0f - (i * 0.02f)
+                        }
+                )
+            }
+        }
+        
+        // Main album cover image
         albumArtBitmap?.let { bitmap ->
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Album Cover",
                 modifier = Modifier
-                    .size(200.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(180.dp)
+                    .graphicsLayer {
+                        rotationZ = rotationAngle
+                    }
                     .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
             )
         } ?: {
             // Placeholder if no album art
             Box(
                 modifier = Modifier
-                    .size(200.dp)
+                    .size(180.dp)
                     .background(MaterialTheme.colorScheme.secondaryContainer)
                     .clip(RoundedCornerShape(12.dp))
                     .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
             ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = "No Album Art",
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(64.dp)
-                )
+                // Animated placeholder when playing
+                if (isPlaying) {
+                    val pulse by remember { mutableStateOf(0.5f) }
+                    LaunchedEffect(isPlaying) {
+                        if (isPlaying) {
+                            var current = pulse
+                            while (isPlaying) {
+                                current = if (current >= 1.0f) 0.0f else current + 0.01f
+                                pulse.value = current
+                                delay(16) // ~60fps
+                            }
+                        } else {
+                            pulse.value = 0.5f
+                        }
+                    }
+                    val pulseSize = 24.dp + (pulse * 16.dp)
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = "No Album Art",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier
+                            .size(pulseSize)
+                            .alpha(0.8f)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = "No Album Art",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier
+                            .size(24.dp)
+                    )
+                }
             }
         }
     }
@@ -711,12 +801,29 @@ fun LyricView(
 
 @Composable
 fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = null) {
-    // Background color that changes with amplitude (blue that gets brighter)
+    // Background that pulses with the beat
+    val pulse by remember { mutableStateOf(0f) }
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            var current = pulse
+            while (isPlaying) {
+                current = (current + 0.02f) % 1.0f
+                pulse.value = current
+                delay(16) // ~60fps
+            }
+        } else {
+            pulse.value = 0f
+        }
+    }
+    
+    // Base color that shifts hue with pulse
+    val baseHue = (210 + pulse * 30) % 360
     val backgroundColor = Color(
-        hue = 210f,
+        hue = baseHue,
         saturation = 0.3f,
         value = 0.1f + amplitude * 0.4f
     )
+    
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -736,6 +843,51 @@ fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = nul
                     val xStep = width / (pointCount - 1)
                     val maxAmplitudeHeight = height * 0.4f // leave some margin
                     val centerY = height / 2f
+                    
+                    // Draw multiple spectrum bars below the waveform
+                    val spectrumBars = 32
+                    val barWidth = width / spectrumBars
+                    val spectrumHeight = height * 0.25
+                    
+                    // Simple spectrum simulation from waveform (in real app, we'd use FFT)
+                    for (i in 0 until spectrumBars) {
+                        val spectrumX = i * barWidth
+                        // Get energy from a portion of the waveform
+                        val startIdx = (i * waveform.size / spectrumBars).coerceAtMost(waveform.size - 1)
+                        val endIdx = (((i + 1) * waveform.size / spectrumBars) - 1).coerceAtMost(waveform.size - 1)
+                        var maxEnergy = 0f
+                        for (j in startIdx..endIdx) {
+                            val absVal = kotlin.math.abs(waveform[j])
+                            if (absVal > maxEnergy) {
+                                maxEnergy = absVal
+                            }
+                        }
+                        val barHeight = spectrumHeight * maxEnergy * 2.0 // Scale up
+                        
+                        // Color based on frequency (low to high: red to violet)
+                        val hue = (i * 180 / spectrumBars).toInt() // 0-180 degrees (red to blue-green)
+                        val barColor = Color(
+                            hue = hue.toFloat(),
+                            saturation = 0.8f,
+                            brightness = 0.7f
+                        )
+                        
+                        // Draw spectrum bar with glow
+                        for (glow in 3 downto 1) {
+                            val alpha = (0.15 * glow).coerceIn(0f, 0.4f)
+                            val strokeWidth = (1.5 * glow).toFloat()
+                            drawRect(
+                                color = barColor.copy(alpha = alpha),
+                                top = centerY + spectrumHeight/2 - barHeight/2,
+                                left = spectrumX,
+                                width = barWidth - 1,
+                                height = barHeight,
+                                strokeWidth = strokeWidth
+                            )
+                        }
+                    }
+                    
+                    // Draw the main waveform path with enhanced glow
                     val path = android.graphics.Path().apply {
                         moveTo(0f, centerY - waveform[0] * maxAmplitudeHeight)
                         for (i in 1 until pointCount) {
@@ -744,32 +896,74 @@ fun Visualizer(amplitude: Float, isPlaying: Boolean, waveform: FloatArray? = nul
                             lineTo(x, y)
                         }
                     }
-                    // Draw the waveform with a glow effect by drawing multiple strokes with increasing width and decreasing alpha
-                    val baseColor = Color(0xFF00BFA6) // teal accent
-                    for (i in 3 downto 1) {
-                        val alpha = (0.2 * i).coerceIn(0f, 0.6f)
-                        val strokeWidth = (2.0 * i).toFloat()
+                    
+                    // Multiple glow layers with rotating hues
+                    val glowLayers = 5
+                    val baseHue = (System.currentTimeMillis() / 20 % 360).toFloat() // Slow hue shift
+                    for (layer in 0 until glowLayers) {
+                        val layerOffset = (layer * 10).toInt()
+                        val layerHue = (baseHue + layerOffset) % 360
+                        val layerAlpha = (0.3 - layer * 0.05).coerceIn(0f, 0.3f)
+                        val layerWidth = (2.0 + layer * 0.5).toFloat()
+                        
+                        val glowColor = Color(
+                            hue = layerHue,
+                            saturation = 0.7f,
+                            brightness = 0.8f,
+                            alpha = layerAlpha
+                        )
+                        
                         drawPath(
                             path = path,
-                            color = baseColor.copy(alpha = alpha),
-                            strokeWidth = strokeWidth
+                            color = glowColor,
+                            strokeWidth = layerWidth
                         )
                     }
-                    // Main stroke
+                    
+                    // Main waveform path (brightest)
                     drawPath(
                         path = path,
-                        color = baseColor,
+                        color = Color(0xFF00BFA6), // teal accent
                         strokeWidth = 2f
                     )
+                    
+                    // Add sparkles at peaks
+                    val sparkleProbability = 0.02 // 2% chance per point to draw a sparkle
+                    val random = java.util.Random(System.currentTimeMillis())
+                    for (i in 0 until pointCount) {
+                        if (random.nextFloat() < sparkleProbability) {
+                            val x = i * xStep
+                            val y = centerY - waveform[i] * maxAmplitudeHeight
+                            val sparkleSize = (4.0 + amplitude * 6.0).toFloat()
+                            val sparkleColor = Color(
+                                hue = (random.nextFloat() * 360),
+                                saturation = 0.8f,
+                                brightness = 0.9f,
+                                alpha = 0.8f
+                            )
+                            drawCircle(
+                                center = Offset(x, y),
+                                radius = sparkleSize,
+                                color = sparkleColor
+                            )
+                        }
+                    }
                 }
             } else {
-                // Draw a placeholder line when not playing or no data
-                drawLine(
-                    start = Offset(0f, size.height / 2),
-                    end = Offset(size.width, size.height / 2),
-                    color = Color(0xFF666666),
-                    strokeWidth = 2f
-                )
+                // Draw a placeholder pattern when not playing or no data
+                val pulseOffset = (System.currentTimeMillis() / 100 % 10).toInt()
+                for (i in 0 until 10) {
+                    val x = (size.width / 10) * i
+                    val y = size.height / 2
+                    val barHeight = (size.height * 0.3) * (0.5 + 0.5 * kotlin.math.sin((i + pulseOffset) * 0.5))
+                    drawRect(
+                        color = Color(0xFF666666),
+                        top = y - barHeight/2,
+                        left = x - 1,
+                        width = 3,
+                        height = barHeight
+                    )
+                }
             }
         }
     }
