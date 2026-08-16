@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.Context
+import android.media.audiofx.Visualizer
 import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
@@ -18,6 +19,9 @@ import androidx.media3.session.MediaSession.Callback
 import androidx.media3.session.MediaSession.Builder
 import com.example.novamusicplayer.MainActivity
 import com.example.novamusicplayer.R
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 
 class PlaybackService : Service() {
 
@@ -25,14 +29,21 @@ class PlaybackService : Service() {
     private lateinit var mediaSession: MediaSession
     private var serviceBinder = LocalBinder()
 
-    // Simple playback state holder
+    // Playback state
     data class PlaybackState(
         val isPlaying: Boolean,
         val positionMs: Long,
         val durationMs: Long
     )
 
-    private val playbackState = androidx.compose.runtime.StateFlow(PlaybackState(false, 0L, 0L))
+    private val _playbackState = MutableStateFlow(PlaybackState(false, 0L, 0L))
+    val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
+
+    // Visualizer data (waveform amplitude 0-255 per byte)
+    private val _visualizerData = MutableStateFlow(ByteArray(0))
+    val visualizerData: StateFlow<ByteArray> = _visualizerData.asStateFlow()
+
+    private var visualizer: Visualizer? = null
 
     inner class LocalBinder : Binder() {
         fun getService(): PlaybackService = this@PlaybackService
@@ -58,6 +69,7 @@ class PlaybackService : Service() {
     }
 
     override fun onDestroy() {
+        visualizer?.release()
         player.release()
         mediaSession.release()
         super.onDestroy()
@@ -111,6 +123,26 @@ class PlaybackService : Service() {
             }
         }
         mediaSession.isActive = true
+
+        // Initialize Visualizer if we have an audio session
+        val sessionId = player.audioSessionId
+        if (sessionId != 0) {
+            visualizer = Visualizer(sessionId).apply {
+                // Capture size: power of two between 32 and 32768
+                val captureSize = Visualizer.getCaptureSizeRange()[1] // max
+                setCaptureSize(captureSize)
+                dataCaptureListener = Visualizer.OnDataCaptureListener(
+                    { visualizer, waveform, timestamp ->
+                        // waveform is a byte array, copy to flow
+                        _visualizerData.update { waveform.clone() }
+                    },
+                    Visualizer.getMaxCaptureRate() // we want waveform, not fft
+                ) { visualizer, fft, timestamp ->
+                    // FFT not used
+                }
+                enabled = true
+            }
+        }
     }
 
     private fun buildNotification(): Notification {
@@ -143,7 +175,7 @@ class PlaybackService : Service() {
             player.duration != C.TIME_UNSET -> player.duration
             else -> 0L
         }
-        playbackState.value = PlaybackState(isPlaying, positionMs, durationMs)
+        _playbackState.value = PlaybackState(isPlaying, positionMs, durationMs)
 
         // Update media session state
         mediaSession.setCurrentPositionAndPlaybackState(
@@ -192,7 +224,10 @@ class PlaybackService : Service() {
     }
 
     /** Expose playback state as a StateFlow for UI collection */
-    fun getPlaybackState(): androidx.compose.runtime.StateFlow<PlaybackState> = playbackState.asStateFlow()
+    fun getPlaybackState(): StateFlow<PlaybackState> = playbackState
+
+    /** Expose visualizer data */
+    fun getVisualizerData(): StateFlow<ByteArray> = visualizerData
 
     companion object {
         private const val NOTIFICATION_ID = 1

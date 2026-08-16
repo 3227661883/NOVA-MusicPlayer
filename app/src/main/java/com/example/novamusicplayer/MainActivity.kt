@@ -25,8 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.novamusicplayer.service.PlaybackService
 import com.example.novamusicplayer.ui.theme.NovaTheme
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -37,19 +40,14 @@ class MainActivity : ComponentActivity() {
             val binder = service as PlaybackService.LocalBinder
             playbackService = binder.getService()
             isBound = true
-            // Start collecting playback state when bound
-            _playbackStateJob = lifecycleScope.launchWhenStarted {
-                playbackService?.getPlaybackState()?.collect { state ->
-                    playbackState.value = state
-                    isPlaying.value = state.isPlaying
-                }
-            }
+            // Start collecting state flows
+            startCollectingState()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             playbackService = null
-            _playbackStateJob?.cancel()
+            stopCollectingState()
         }
     }
 
@@ -78,6 +76,8 @@ class MainActivity : ComponentActivity() {
             )
             // Start service and set the URI
             startPlaybackService(it)
+            // Update song info (simple file name)
+            currentSongInfo.value = uri.lastPathSegment ?: "Unknown"
         }
     }
 
@@ -154,23 +154,47 @@ class MainActivity : ComponentActivity() {
     private var isPlaying by remember { mutableStateOf(false) }
     private val playbackState by remember { mutableStateOf(PlaybackService.PlaybackState(false, 0L, 0L)) }
     private var currentSongInfo by remember { mutableStateOf("No song selected") }
-    // Simple amplitude for visualizer (0.0f to 1.0f) - we'll use a normalized RMS value
-    private val visualizerAmplitude by remember { mutableStateOf(0f) }
-    private var _playbackStateJob: Job? = null
+    private var visualizerAmplitude by remember { mutableStateOf(0f) }
 
-    // Update current song info when metadata changes (simplified - in reality we'd observe media metadata)
-    private fun updateSongInfo(uri: Uri?) {
-        // For now, just show the file name - real implementation would extract metadata
-        currentSongInfo.value = uri?.lastPathSegment ?: "Unknown"
+    private var stateCollectionJob: kotlinx.coroutines.Job? = null
+
+    private fun startCollectingState() {
+        playbackService?.let { service ->
+            stateCollectionJob = lifecycleScope.launch {
+                // Collect playbackState
+                service.playbackState.collect { state ->
+                    playbackState.value = state
+                    isPlaying.value = state.isPlaying
+                }
+            }
+            lifecycleScope.launch {
+                // Collect visualizer data and compute amplitude
+                service.visualizerData.collect { waveform ->
+                    if (waveform.isNotEmpty()) {
+                        // Compute RMS or peak amplitude
+                        val maxAbs = waveform.map { it.toInt() and 0xFF }.map { if (it > 127) it - 256 else it }.map { kotlin.math.abs(it) }.maxOrNull() ?: 0
+                        // Normalize to 0-1 (max possible is 128 for signed byte)
+                        visualizerAmplitude.value = maxAbs / 128f
+                    } else {
+                        visualizerAmplitude.value = 0f
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopCollectingState() {
+        stateCollectionJob?.cancel()
+        stateCollectionJob = null
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        stopCollectingState()
         if (isBound) {
             unbindService(serviceConnection)
             isBound = false
         }
-        _playbackStateJob?.cancel()
     }
 }
 
@@ -206,7 +230,7 @@ fun NovaMusicPlayerUI(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Visualizer - now using actual amplitude from audio (placeholder for now)
+        // Visualizer - using amplitude from audio waveform
         Visualizer(amplitude = visualizerAmplitude, isPlaying = isPlaying)
 
         Spacer(modifier = Modifier.height(16.dp))
