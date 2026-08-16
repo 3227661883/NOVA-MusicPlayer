@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.audiofx.Visualizer
 import android.net.Uri
 import android.os.Binder
@@ -42,6 +43,10 @@ class PlaybackService : Service() {
     // Visualizer data (waveform amplitude 0-255 per byte)
     private val _visualizerData = MutableStateFlow(ByteArray(0))
     val visualizerData: StateFlow<ByteArray> = _visualizerData.asStateFlow()
+
+    // Album art URI (can be null)
+    private val _albumArtUri = MutableStateFlow<Uri?>(null)
+    val albumArtUri: StateFlow<Uri?> = _albumArtUri.asStateFlow()
 
     private var visualizer: Visualizer? = null
 
@@ -200,6 +205,8 @@ class PlaybackService : Service() {
                     metadata.albumArtUri ?: null
                 )
             )
+            // Update album art flow
+            _albumArtUri.value = metadata.albumArtUri
         }
     }
 
@@ -228,6 +235,9 @@ class PlaybackService : Service() {
 
     /** Expose visualizer data */
     fun getVisualizerData(): StateFlow<ByteArray> = visualizerData
+
+    /** Expose album art URI */
+    fun getAlbumArtUri(): StateFlow<Uri?> = albumArtUri
 
     companion object {
         private const val NOTIFICATION_ID = 1

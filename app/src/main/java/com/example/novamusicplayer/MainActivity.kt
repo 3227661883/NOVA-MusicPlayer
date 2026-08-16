@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -16,14 +18,29 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.image.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Unit
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.withResources
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.node.DrawModifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.PainterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.novamusicplayer.service.PlaybackService
@@ -91,7 +108,8 @@ class MainActivity : ComponentActivity() {
                     isPlaying = isPlaying,
                     playbackState = playbackState,
                     visualizerAmplitude = visualizerAmplitude,
-                    currentSongInfo = currentSongInfo
+                    currentSongInfo = currentSongInfo,
+                    albumArtBitmap = albumArtBitmap
                 )
             }
         }
@@ -155,6 +173,7 @@ class MainActivity : ComponentActivity() {
     private val playbackState by remember { mutableStateOf(PlaybackService.PlaybackState(false, 0L, 0L)) }
     private var currentSongInfo by remember { mutableStateOf("No song selected") }
     private var visualizerAmplitude by remember { mutableStateOf(0f) }
+    private var albumArtBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
     private var stateCollectionJob: kotlinx.coroutines.Job? = null
 
@@ -177,6 +196,18 @@ class MainActivity : ComponentActivity() {
                         visualizerAmplitude.value = maxAbs / 128f
                     } else {
                         visualizerAmplitude.value = 0f
+                    }
+                }
+            }
+            lifecycleScope.launch {
+                // Collect album art URI and load bitmap
+                service.albumArtUri.collect { uri ->
+                    uri?.let { albumUri ->
+                        // Attempt to load bitmap from content URI
+                        contentResolver?.openInputStream(albumUri)?.use { inputStream ->
+                            val bitmap = BitmapFactory.decodeStream(inputStream)
+                            albumArtBitmap.value = bitmap
+                        }
                     }
                 }
             }
@@ -205,7 +236,8 @@ fun NovaMusicPlayerUI(
     isPlaying: Boolean,
     playbackState: PlaybackService.PlaybackState,
     visualizerAmplitude: Float,
-    currentSongInfo: String
+    currentSongInfo: String,
+    albumArtBitmap: Bitmap?
 ) {
     Column(
         modifier = Modifier
@@ -221,17 +253,38 @@ fun NovaMusicPlayerUI(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Song info
-        Text(
-            text = currentSongInfo,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Song info and album art
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Text(
+                    text = currentSongInfo,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            albumArtBitmap?.let { bitmap ->
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Album Art",
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Visualizer - using amplitude from audio waveform
-        Visualizer(amplitude = visualizerAmplitude, isPlaying = isPlaying)
+        // Visualizer - using amplitude from audio waveform, with album art as background if available
+        Visualizer(
+            amplitude = visualizerAmplitude,
+            isPlaying = isPlaying,
+            albumArtBitmap = albumArtBitmap
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -279,44 +332,51 @@ fun NovaMusicPlayerUI(
 }
 
 @Composable
-fun Visualizer(amplitude: Float, isPlaying: Boolean) {
-    // Simple animated visualizer: number of bars, height based on amplitude + animation
-    val progress = remember { mutableStateOf(0f) }
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            var current = progress.value
-            while (isPlaying) {
-                current = (current + 0.02f) % 1.0f
-                progress.value = current
-                delay(20) // 50 fps
-            }
-        } else {
-            progress.value = 0f
-        }
-    }
-    val waveHeight = (amplitude * 0.5f + progress.value * 0.5f) * 80.dp // max height 80dp
-    Row(
+fun Visualizer(amplitude: Float, isPlaying: Boolean, albumArtBitmap: Bitmap? = null) {
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(100.dp)
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        repeat(10) {
-            val barHeight = if (isPlaying) {
-                // Vary each bar slightly for a more interesting look
-                val offset = (it * 0.1f + progress.value) % 1.0f
-                (amplitude * 0.3f + offset * 0.7f) * 80.dp
-            } else {
-                0.dp
-            }
-            Box(
-                modifier = Modifier
-                    .width(6.dp)
-                    .height(barHeight)
-                    .background(Color(0xFF00BFA6)) // teal accent
+            .height(180.dp)
+            .background(
+                albumArtBitmap?.let { bitmap ->
+                    bitmap.asImageBitmap()
+                } ?: Color(0xFF0D0D0D) // dark background if no album art
             )
+            .clip(RoundedCornerShape(20.dp))
+    ) {
+        // Draw waveform on top
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+        ) {
+            if (isPlaying) {
+                val width = size.width
+                val height = size.height
+                val barCount = 30
+                val barWidth = width / barCount
+                val maxBarHeight = height * 0.7f // leave some margin
+                // We need waveform data; we don't have it directly here, but we can approximate using amplitude
+                // For demo, we'll generate a simple sine wave based on amplitude and time
+                val time = System.currentTimeMillis() % 2000L / 2000f // 0-1 over 2 seconds
+                repeat(barCount) { index ->
+                    val x = index * barWidth
+                    // Use a varying phase per bar for interesting look
+                    val phase = (index * 0.2f + time * 4f) % (2 * Math.PI)
+                    val sinVal = kotlin.math.sin(phase)
+                    val barHeight = (maxBarHeight * amplitude * 0.8f) * (sinVal * 0.5f + 0.5f) // 0-1 range
+                    val barColor = Color(
+                        red = 0f,
+                        green = (0.7f + amplitude * 0.3f).coerceIn(0f, 1f),
+                        blue = 0.9f,
+                        alpha = 0.8f
+                    )
+                    drawRect(
+                        color = barColor,
+                        topLeft = Offset(x, height / 2 - barHeight / 2),
+                        size = Size(barWidth - 2, barHeight)
+                    )
+                }
+            }
         }
     }
 }
