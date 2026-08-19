@@ -30,6 +30,15 @@ android {
         kotlinCompilerExtensionVersion = "1.6.10"
     }
 
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -40,19 +49,8 @@ android {
         }
     }
 
-    // JVM toolchain for consistent compilation (fixes kapt JVM target mismatch)
-    kotlin {
-        jvmToolchain(17)
-    }
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    // Optional: enable view binding if needed
+    // viewBinding { enabled = true }
 }
 
 dependencies {
