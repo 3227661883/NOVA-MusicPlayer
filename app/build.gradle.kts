@@ -40,8 +40,19 @@ android {
         }
     }
 
-    // Optional: enable view binding if needed
-    // viewBinding { enabled = true }
+    // JVM toolchain for consistent compilation (fixes kapt JVM target mismatch)
+    kotlin {
+        jvmToolchain(17)
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
 }
 
 dependencies {
@@ -83,8 +94,6 @@ dependencies {
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.cronet)
     implementation(libs.media3.session)
-
-    // Metadata parsing
 
     // Room Database
     implementation(libs.room.runtime)
