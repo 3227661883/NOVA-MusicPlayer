@@ -202,7 +202,7 @@ class MainActivity : ComponentActivity() {
 
     // State variables for UI
     private var isPlaying by remember { mutableStateOf(false) }
-    private val playbackState by remember { mutableStateOf(PlaybackService.PlaybackState(false, 0L, 0L)) }
+    private val playbackState by remember { mutableStateOf(PlaybackStateData(false, 0L, 0L)) }
     private var currentSongInfo by remember { mutableStateOf("No song selected") }
     private var visualizerAmplitude by remember { mutableStateOf(0f) }
     private var waveform by remember { mutableStateOf<FloatArray?>(null) }
@@ -580,7 +580,7 @@ fun NovaMusicPlayerUI(
     onSelectSong: () -> Unit,
     onPlayPause: () -> Unit,
     isPlaying: Boolean,
-    playbackState: PlaybackService.PlaybackState,
+    playbackState: PlaybackStateData,
     visualizerAmplitude: Float,
     waveform: FloatArray?,
     currentSongInfo: String,
@@ -1232,10 +1232,10 @@ private fun formatMs(millis: Long): String {
 }
 
 /**
- * Simple data class to mirror PlaybackService.PlaybackState.
+ * Simple data class to mirror PlaybackStateData.
  * In a real app, we would likely use the same class or a sealed interface.
  */
-data class PlaybackService$PlaybackState(
+data class PlaybackStateData(
     val isPlaying: Boolean,
     val positionMs: Long,
     val durationMs: Long
