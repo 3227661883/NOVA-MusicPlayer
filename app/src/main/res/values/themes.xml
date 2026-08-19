@@ -41,14 +41,6 @@
         <item name="colorOutline">@color/outline</item>
         <item name="colorOutlineVariant">@color/outline_variant</item>
 
-        <!-- Inverse -->
-        <item name="colorInverseSurface">@color/inverse_surface</item>
-        <item name="colorInverseOnSurface">@color/inverse_on_surface</item>
-        <item name="colorInversePrimary">@color/inverse_primary</item>
-
-        <!-- Scrim -->
-        <item name="colorScrim">@color/scrim</item>
-
         <!-- Status bar & navigation bar -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
@@ -58,9 +50,6 @@
 
         <!-- Window background -->
         <item name="android:windowBackground">@color/background</item>
-
-        <!-- Typography overrides for cyberpunk feel -->
-        <item name="android:fontFamily">@font/geometric_font</item>
     </style>
 
     <!-- Theme for dialogs -->
