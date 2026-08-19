@@ -78,7 +78,7 @@ dependencies {
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.exoplayer.smoothstreaming)
     implementation(libs.media3.exoplayer.rtsp)
-    implementation(libs.media3.exoplayer.ffmpeg) // for DSD, MQA, etc.
+    // implementation(libs.media3.exoplayer.ffmpeg)  // Not available in 1.4.1
     implementation(libs.media3.common)
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.cronet)

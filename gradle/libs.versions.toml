@@ -23,6 +23,7 @@ espresso = "3.5.1"
 composeUiTest = "1.6.0"
 testCore = "1.5.3"
 testExtJunit = "1.2.1"
+hiltNavigationCompose = "1.2.0"
 
 [libraries]
 # Core
@@ -50,7 +51,7 @@ androidx-lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-
 # Hilt
 hilt-android = { module = "com.google.dagger:hilt-android", version.ref = "hilt" }
 hilt-compiler = { module = "com.google.dagger:hilt-compiler", version.ref = "hilt" }
-hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hilt" }
+hilt-navigation-compose = { module = "androidx.hilt:hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
 
 # Media3 / ExoPlayer
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
@@ -58,7 +59,7 @@ media3-exoplayer-dash = { module = "androidx.media3:media3-exoplayer-dash", vers
 media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
 media3-exoplayer-smoothstreaming = { module = "androidx.media3:media3-exoplayer-smoothstreaming", version.ref = "media3" }
 media3-exoplayer-rtsp = { module = "androidx.media3:media3-exoplayer-rtsp", version.ref = "media3" }
-media3-exoplayer-ffmpeg = { module = "androidx.media3:media3-exoplayer-ffmpeg", version.ref = "media3" }
+# media3-exoplayer-ffmpeg = { module = "androidx.media3:media3-exoplayer-ffmpeg", version.ref = "media3" }  # Not available in 1.4.1
 media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 media3-datasource-cronet = { module = "androidx.media3:media3-datasource-cronet", version.ref = "media3" }
@@ -100,5 +101,6 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "t
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
