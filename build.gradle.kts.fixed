@@ -1,13 +1,15 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    kotlin("kapt")
-    alias(libs.plugins.hilt.android)
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    // Hilt Gradle Plugin
+    alias(libs.plugins.hilt.android) apply false
+    // Google Services (optional for Firebase/Crashlytics)
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 android {
-    compileSdk = 35
     namespace = "com.example.novamusicplayer"
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.novamusicplayer"
@@ -76,7 +78,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.exoplayer.smoothstreaming)
+    implementation(libs.media3.exoplayer.ss)
     implementation(libs.media3.exoplayer.rtsp)
     implementation(libs.media3.exoplayer.ffmpeg) // for DSD, MQA, etc.
     implementation(libs.media3.common)
@@ -102,7 +104,7 @@ dependencies {
     // WorkManager
     implementation(libs.work.runtime)
 
-    // Coil for image loading
+    // Glide or Coil for image loading (we'll use Coil for compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.coil.svg)

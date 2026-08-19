@@ -4,6 +4,11 @@ pluginManagement {
         google()
         mavenCentral()
     }
+    versionCatalogs {
+        create("libs") {
+            from("gradle/libs.versions.toml")
+        }
+    }
 }
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
@@ -11,8 +16,6 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
     }
-    // Version catalog is automatically loaded from gradle/libs.versions.toml by AGP 8.2+
-    // No explicit versionCatalogs block needed
 }
 rootProject.name = "NOVA MusicPlayer"
 include(":app")

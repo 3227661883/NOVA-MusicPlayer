@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">NOVA MusicPlayer</string>
+    <string name="playing_music">Playing music</string>
+    <string name="pause">Pause</string>
+    <string name="play">Play</string>
+    <string name="select_song">Select Song</string>
+    <string name="no_song_selected">No song selected</string>
+    <string name="unknown_artist">Unknown Artist</string>
+    <string name="unknown_track">Unknown Track</string>
+    <string name="equalizer">Equalizer</string>
+    <string name="visualizer">Visualizer</string>
+    <string name="lyrics">Lyrics</string>
+    <string name="cue_tracks">CUE Tracks</string>
+    <string name="extracting_archive">Extracting archive...</string>
+    <string name="extraction_complete">Archive extraction complete</string>
+    <string name="extraction_error">Error extracting archive</string>
+    <string name="cue_load_error">Error loading CUE file</string>
+    <string name="permission_audio">Permission to access audio files</string>
+    <string name="permission_storage">Permission to access storage</string>
+</resources>

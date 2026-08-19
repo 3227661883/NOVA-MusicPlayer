@@ -1,13 +1,12 @@
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    id(libs.plugins.android.application)
+    kotlin(libs.plugins.kotlin.android)
     kotlin("kapt")
-    alias(libs.plugins.hilt.android)
+    id(libs.plugins.hilt.android)
 }
 
 android {
     compileSdk = 35
-    namespace = "com.example.novamusicplayer"
 
     defaultConfig {
         applicationId = "com.example.novamusicplayer"
@@ -76,7 +75,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.dash)
     implementation(libs.media3.exoplayer.hls)
-    implementation(libs.media3.exoplayer.smoothstreaming)
+    implementation(libs.media3.exoplayer.ss)
     implementation(libs.media3.exoplayer.rtsp)
     implementation(libs.media3.exoplayer.ffmpeg) // for DSD, MQA, etc.
     implementation(libs.media3.common)
@@ -102,7 +101,7 @@ dependencies {
     // WorkManager
     implementation(libs.work.runtime)
 
-    // Coil for image loading
+    // Glide or Coil for image loading (we'll use Coil for compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.coil.svg)

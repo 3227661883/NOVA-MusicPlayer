@@ -11,8 +11,11 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
     }
-    // Version catalog is automatically loaded from gradle/libs.versions.toml by AGP 8.2+
-    // No explicit versionCatalogs block needed
+    versionCatalogs {
+        create("libs") {
+            from("gradle/libs.versions.toml")
+        }
+    }
 }
 rootProject.name = "NOVA MusicPlayer"
 include(":app")

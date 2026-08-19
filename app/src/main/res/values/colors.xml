@@ -1,0 +1,81 @@
+<resources>
+    <!-- Nova Music Player Color Palette - Cyberpunk/Neon Theme -->
+    <color name="primary">#00BFA6</color>
+    <color name="primary_variant">#009688</color>
+    <color name="primary_dark">#006E60</color>
+    <color name="primary_light">#4DB6AC</color>
+    <color name="primary_container">#004D40</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_primary_container">#A7FFEB</color>
+
+    <color name="secondary">#FF6D00</color>
+    <color name="secondary_variant">#E65100</color>
+    <color name="secondary_container">#FFE0B2</color>
+    <color name="on_secondary">#FFFFFF</color>
+    <color name="on_secondary_container">#3E1D00</color>
+
+    <color name="tertiary">#AA00FF</color>
+    <color name="tertiary_container">#EDE7F6</color>
+    <color name="on_tertiary">#FFFFFF</color>
+    <color name="on_tertiary_container">#2E003E</color>
+
+    <!-- Surface colors - Dark theme base -->
+    <color name="surface">#121212</color>
+    <color name="surface_variant">#1E1E1E</color>
+    <color name="surface_container">#242424</color>
+    <color name="surface_container_high">#2C2C2C</color>
+    <color name="surface_container_highest">#363636</color>
+    <color name="on_surface">#FFFFFF</color>
+    <color name="on_surface_variant">#B0B0B0</color>
+
+    <!-- Background -->
+    <color name="background">#0D0D0D</color>
+    <color name="on_background">#FFFFFF</color>
+
+    <!-- Error -->
+    <color name="error">#CF6679</color>
+    <color name="error_container">#93000A</color>
+    <color name="on_error">#FFFFFF</color>
+    <color name="on_error_container">#FFDAD6</color>
+
+    <!-- Outline -->
+    <color name="outline">#767676</color>
+    <color name="outline_variant">#4A4A4A</color>
+
+    <!-- Inverse -->
+    <color name="inverse_surface">#E0E0E0</color>
+    <color name="inverse_on_surface">#1C1C1C</color>
+    <color name="inverse_primary">#006E60</color>
+
+    <!-- Shadow -->
+    <color name="shadow">#000000</color>
+
+    <!-- Scrim -->
+    <color name="scrim">#000000</color>
+
+    <!-- Accent colors for visualizer -->
+    <color name="visualizer_cyan">#00BFA6</color>
+    <color name="visualizer_orange">#FF6D00</color>
+    <color name="visualizer_purple">#AA00FF</color>
+    <color name="visualizer_pink">#FF007F</color>
+    <color name="visualizer_green">#00FF7F</color>
+    <color name="visualizer_blue">#007FFF</color>
+
+    <!-- Equalizer -->
+    <color name="equalizer_bar_bg">#1A1A1A</color>
+    <color name="equalizer_bar_active">#00BFA6</color>
+    <color name="equalizer_bar_inactive">#333333</color>
+
+    <!-- Album cover border -->
+    <color name="album_border">#00BFA6</color>
+
+    <!-- Lyric colors -->
+    <color name="lyric_current">#00BFA6</color>
+    <color name="lyric_normal">#FFFFFF</color>
+    <color name="lyric_faded">#767676</color>
+    <color name="lyric_bg_current">#004D40</color>
+
+    <!-- Progress -->
+    <color name="progress_bg">#333333</color>
+    <color name="progress_track">#00BFA6</color>
+</resources>
