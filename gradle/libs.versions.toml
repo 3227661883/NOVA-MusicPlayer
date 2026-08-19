@@ -7,10 +7,12 @@ appcompat = "1.6.1"
 material = "1.11.0"
 activityCompose = "1.8.2"
 composeBom = "2024.02.00"
+material3 = "1.2.1"
 lifecycle = "2.7.0"
 hilt = "2.51"
+hiltNavigationCompose = "1.2.0"
 media3 = "1.4.1"
-jaudiotagger = "2.2.7"
+jaudiotagger = "3.0.1"
 room = "2.6.1"
 datastore = "1.0.0"
 coroutines = "1.7.3"
@@ -23,7 +25,6 @@ espresso = "3.5.1"
 composeUiTest = "1.6.0"
 testCore = "1.5.3"
 testExtJunit = "1.2.1"
-hiltNavigationCompose = "1.2.0"
 
 [libraries]
 # Core
@@ -38,7 +39,7 @@ androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = 
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-graphics = { module = "androidx.compose.ui:ui-graphics" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
-androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3", version.ref = "material3" }
 androidx-compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 androidx-compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "composeUiTest" }
@@ -59,7 +60,7 @@ media3-exoplayer-dash = { module = "androidx.media3:media3-exoplayer-dash", vers
 media3-exoplayer-hls = { module = "androidx.media3:media3-exoplayer-hls", version.ref = "media3" }
 media3-exoplayer-smoothstreaming = { module = "androidx.media3:media3-exoplayer-smoothstreaming", version.ref = "media3" }
 media3-exoplayer-rtsp = { module = "androidx.media3:media3-exoplayer-rtsp", version.ref = "media3" }
-# media3-exoplayer-ffmpeg = { module = "androidx.media3:media3-exoplayer-ffmpeg", version.ref = "media3" }  # Not available in 1.4.1
+# media3-exoplayer-ffmpeg removed - not available in 1.4.1
 media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
 media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 media3-datasource-cronet = { module = "androidx.media3:media3-datasource-cronet", version.ref = "media3" }
