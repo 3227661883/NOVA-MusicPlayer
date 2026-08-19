@@ -26,8 +26,10 @@ android {
         compose = true
     }
 
+    // Use Compose Compiler version compatible with Kotlin 1.9.20
+    // See https://developer.android.com/jetpack/compose/compatibility
     composeOptions {
-        kotlinCompilerExtensionVersion = "1.6.10"
+        kotlinCompilerExtensionVersion = "1.5.3"
     }
 
     // Fix JVM target compatibility
