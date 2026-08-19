@@ -41,27 +41,27 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.node.DrawModifier
 import androidx.compose.ui.platform.LocalDensity
-            androidx.compose.ui.platform.LocalLayoutDirection
-            androidx.compose.ui.res.PainterResource
-            androidx.compose.ui.text.font.FontWeight
-            androidx.compose.ui.unit.dp
-            androidx.core.content.ContextCompat
-            androidx.lifecycle.lifecycleScope
-            com.example.novamusicplayer.service.PlaybackService
-            com.example.novamusicplayer.ui.theme.NovaTheme
-            kotlinx.coroutines.flow.collectLatest
-            kotlinx.coroutines.flow.update
-            kotlinx.coroutines.launch
-            kotlinx.coroutines.withContext
-            okhttp3.OkHttpClient
-            okhttp3.Request
-            okhttp3.Response
-            org.json.JSONObject
-            java.io.File
-            java.io.FileOutputStream
-            java.io.IOException
-            java.util.zip.ZipEntry
-            java.util.zip.ZipFile
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.PainterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.example.novamusicplayer.service.PlaybackService
+import com.example.novamusicplayer.ui.theme.NovaTheme
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
 class MainActivity : ComponentActivity() {
 
@@ -503,7 +503,7 @@ class MainActivity : ComponentActivity() {
                     // Try without artist
                     val url2 = "https://lrclib.net/api/get?track=$encodedTrack"
                     val request2 = Request.Builder().url(url2).build()
-                    response2 = client.newCall(request2).execute()
+                    val response2 = client.newCall(request2).execute()
                     if (!response2.isSuccessful) {
                         return@withContext emptyList()
                     }
@@ -563,16 +563,6 @@ class MainActivity : ComponentActivity() {
         if (index != currentLyricIndex.value) {
             currentLyricIndex.value = index
         }
-    }
-
-    private fun stopCollectingState() {
-        stateCollectionJob?.cancel()
-        stateCollectionJob = null
-        lyricFetchJob?.cancel()
-        equalizerJob?.cancel()
-        rotationJob?.cancel()
-        cueProcessingJob?.cancel()
-        extractionJob?.cancel()
     }
 
     override fun onDestroy() {
