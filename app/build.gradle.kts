@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     kotlin("kapt")
     alias(libs.plugins.hilt.android)
+    id("org.jetbrains.kotlin.plugin.compose") version "1.9.20"
 }
 
 android {
@@ -26,9 +27,10 @@ android {
         compose = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.6.10"
-    }
+    // Remove explicit kotlinCompilerExtensionVersion - handled by Compose Compiler plugin
+    // composeOptions {
+    //     kotlinCompilerExtensionVersion = "1.6.10"
+    // }
 
     // Fix JVM target compatibility
     kotlinOptions {
