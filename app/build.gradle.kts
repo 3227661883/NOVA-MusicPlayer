@@ -85,7 +85,6 @@ dependencies {
     implementation(libs.media3.session)
 
     // Metadata parsing
-    implementation(libs.jaudiotagger)
 
     // Room Database
     implementation(libs.room.runtime)
