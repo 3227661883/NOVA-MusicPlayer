@@ -30,8 +30,13 @@ android {
         kotlinCompilerExtensionVersion = "1.6.10"
     }
 
+    // Fix JVM target compatibility
     kotlinOptions {
         jvmTarget = "17"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildTypes {
@@ -87,6 +92,8 @@ dependencies {
     implementation(libs.media3.datasource)
     implementation(libs.media3.datasource.cronet)
     implementation(libs.media3.session)
+
+    // Metadata parsing (removed jaudiotagger - not on Maven Central)
 
     // Room Database
     implementation(libs.room.runtime)
